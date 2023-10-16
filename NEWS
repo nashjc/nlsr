@@ -40,6 +40,13 @@ TODO:
 
          o    Add nls2 like capability to have grid of starting values??
 
+231015
+         o    Expand "Intro to nlsr" vignette to explain how to extract standard errors for
+              coefficients.
+
+230831   
+         o    Minor edits and adjustments to placement of files to allow build on different
+              platforms.
 
 230508
          o    pnlm0() and pnls0() replaced with pnlslm() and pnls() for more informative

@@ -300,6 +300,24 @@ badstart<-nlxb(formula=frmt, start=stspecial, data=weeddf)
 print(badstart)
 ```
 
+### Extracting standard errors from nlsr solutions
+
+While it is straightforward to display coefficients of models with their standard errors
+(SE) and related statistics by **print**ing the solution, some users may need to be able
+to save and use the quantities, for example, in particular presentations of them. A query
+from Rohana Ambagaspitiya of the University of Calgary prompted me to explain how to do
+this, as the SE's and related quantities are not in the output of `nlxb()` or `nlfb()`,
+but are computed in the `summary()` and `print()` functions. Saving the SE of the
+`Asym` coefficient in the `tnlx1` solution above is illustrated.
+
+```{r tnlx1se, echo=TRUE, eval=TRUE}  
+ssum<-summary(tnlx1)
+str(ssum)
+AsymSE<-ssum$param[1,2]
+AsymSE
+```
+
+
 ## selfStart options
 
 The form of the logistic given by `frmt` is available as a **selfStart** model,
