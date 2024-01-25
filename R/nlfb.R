@@ -70,7 +70,7 @@ getweights <- function() { # local function
   #   cat("ctrl$phi=",ctrl$phi,"\n")
   if (ctrl$phi == 0.0) phiroot<-0.0 else phiroot<-sqrt(ctrl$phi)
   if (ctrl$psi == 0.0) psiroot<-0.0 else psiroot<-sqrt(ctrl$psi)
-  ctrl$stepredn <- ctrl$stepredn
+#  ctrl$stepredn <- ctrl$stepredn # unnecessary!
   nbtlim <- ctrl$nbtlim 
   if (ctrl$stepredn <= 0) {
      nbtlim <- 1 # only 1 step if not backtracking
