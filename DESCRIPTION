@@ -1,8 +1,8 @@
 Package: nlsr
 Type: Package
 Title: Functions for Nonlinear Least Squares Solutions - Updated 2022
-Version: 2023.10.15
-Date: 2023-10-15
+Version: 2024.01.29
+Date: 2023-01-29
 Authors@R: c(person(given = c("John", "C"), family = "Nash", 
         role = c("aut", "cre"), email = "nashjc@uottawa.ca"), 
     	person(given = "Duncan", family = "Murdoch", role = "aut", 

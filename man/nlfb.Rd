@@ -31,8 +31,11 @@ the conventional 'data - model' approach. The sum of squares is the same.}
 
 \item{jacfn}{A function that evaluates the Jacobian of the sum of squares 
 function, that is, the matrix of partial derivatives of the residuals 
-with respect to each of the parameters. If NULL (default), uses an 
-approximation.
+with respect to each of the parameters. In earlier versions, a NULL entry
+(which was the default default), used a numeric approximation. However, 
+approximations can lead to poor performance. Therefore, either \code{jacfn}
+must be provided, or the \code{control} element \code{japprox} must be provided.
+See \code{details}.
 
 The Jacobian MUST be returned as the attribute "gradient" of this function,
 allowing \code{jacfn} to have the same name and be the same code block
@@ -100,7 +103,16 @@ The \code{weights} argument can be a vector of fixed weights, in which
 case the objective function that will be 
 minimized is the sum of squares where each residual is multiplied by the 
 square root of the corresponding weight. Default \code{NULL} implies 
-unit weights.  \code{weights} may alternatively be a function with header \code{function(parms, resids)} to compute such a vector.
+unit weights.  
+\code{weights} may alternatively be a function with header 
+\code{function(parms, resids)} to compute such a vector.
+
+The default for the \code{control} element \code{japprox} is NULL. Thus
+if \code{jacfn} is not specified, this must be supplied, and should be
+given as the character string name of the approximation function. Package
+\code{nlsr} supplies \code{jafwd}, \code{jacentral}, \code{jaback}, 
+and \code{jand}, which use forward, central and backward differences, 
+or the package \code{numDeriv} approximations. 
 }
 \examples{
 library(nlsr)
@@ -129,6 +141,11 @@ st <- c(b1=2, b2=1, b3=1) # a default starting vector (named!)
 anlf0 <- nlfb(start=st, resfn=shobbs.res, jacfn=shobbs.jac,
                trace=TRUE, control=list(prtlvl=1))
 anlf0
+
+# Default controls, standard Nash-Marquardt algorithm
+anlf0n <- nlfb(start=st, resfn=shobbs.res, trace=TRUE, 
+          control=list(prtlvl=1, japprox="jacentral"))
+anlf0n
 
 # Hartley with step reduction factor of .2
 anlf0h <- nlfb(start=st, resfn=shobbs.res, jacfn=shobbs.jac,
