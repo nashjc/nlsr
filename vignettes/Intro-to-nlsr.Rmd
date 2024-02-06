@@ -720,20 +720,109 @@ There are differences in the (weighted) sums of squares. The **dynweighted** cas
 the residuals weighted
 by the actual CURRENT fits as expressed by the formula. The **formulaweighted** case
 computes the weights at each
-iteration from the previous (or original) fit. It is a form of iteratively weighted least
-squares. The case
-**wtt3nlm** above uses `nlsLM` with weights specified in `wfct()` and computes the weights
-once from an unweighted
+iteration from the previous (or original) fit. It is a form of 
+iteratively weighted least squares. The case
+**wtt3nlm** above uses `nlsLM` with weights specified in `wfct()` and 
+computes the weights once from an unweighted
 model, then runs a second, statically weighted calculation. Keeping track of these
 differences requires a lot of
 care, and I advise documenting what is done carefully.
 
 ## Models that use multiple functional forms
 
-?? two straight lines
-?? WOOD function
+The query by John Sorkin in 2013 on the R-help list, item
+https://stat.ethz.ch/pipermail/r-help/2013-January/344918.html ,
+asks about fitting a composite model made up of "pieces". Sorkin's
+problem, as described, seems incomplete. We will use two problems
+that we can present clearly. 
+
+### Two straight lines
+
+We will generate data for two 
+intersecting straight lines. These will intersect at the point
+`(kx, ky)`, with slopes `sl` and `sr` on the left and right hand
+sides of the point.
+
+```{r 2slA}
+xx<-1:50 # simple sequence of 50 points
+kx<-24 # Set x coordinate of intersect
+ky<-10 # Set y coordinate of intersect
+sl<-1 # left slope
+sr<-0 # right slope
+# now write down model using conditionals
+formu<- yy ~ (xx <= kx)*(sl*(xx - kx)+ky) +  (xx > kx)*(sr*(xx - kx)+ky) 
+# Generate "exact" model for given parameters
+yy0<- (xx <= kx)*(sl*(xx - kx)+ky) +  (xx > kx)*(sr*(xx - kx)+ky) 
+ee<-runif(50, -3, 3) # generate some "errors"
+ee<-ee-mean(ee) # but center them
+yy<-yy0+ee # and add error to the "exact" model
+sldf<-data.frame(xx=xx, yy=yy) # make a data frame of the data
+# Try to estimate a model from the data and the formula
+t2sl<-try(nlxb(formu, data=sldf, start=c(kx=1, ky=1, sl=1, sr=1), trace=TRUE))
+# But that fails because the ">" in the formula trips up derivative program
+# We can still use approximate Jacobian
+t2slx<-nlxb(formu, data=sldf, start=c(kx=1, ky=1, sl=1, sr=1), trace=TRUE,
+            control=list(japprox="jacentral"))
+t2slx
+coef(t2slx)
+plot(xx, yy)
+yline<-fitted(t2slx)
+lines(xx, yline, type='l', col='red')
+```
+
+### The WOOD test function
+
+Let us try an example -- the Wood test function (Problem 14 in @More1981TUO).
+Some authors refer to this as the Colville function 
+(https://www.sfu.ca/~ssurjano/colville.html)
+
+This problem is usually stated as a function minimization in
+4 parameters. This is 
+
+$$ f(x) = 100*({x_1}^2-x_2)^2+(x_1-1)^2+(x_3-1)^2+  \\
+    90*({x_3}^2-x_4)^2+10.1((x_2-1)^2+(x_4-1)^2)+  \\
+    19.8*(x_2-1)*(x_4-1)$$
 
 
+It is, however, a nonlinear least squares problem for which we can write the
+residuals as a set of formulas.
+
+```{r woodform1}
+library(nlsr)
+library(minpack.lm)
+frm<- 0 ~ (x == 1) * (10 * (`par[2]` - `par[1]` * `par[1]`)) + 
+  (x == 2) * (1 - `par[1]`) + 
+  (x == 3) * ((`par[4]` - `par[3]` * `par[3]`) * sqrt(90)) + 
+  (x == 4) * (1 - `par[3]`) + 
+  (x == 5) * ((`par[2]` + `par[4]` - 2) * sqrt(10)) + 
+  (x == 6) * ((`par[2]` - `par[4]`) * sqrt(0.1))
+
+testnls<- try(nls(frm, data=data.frame(x = 1:6), 
+  start= c(`par[1]` = -3, `par[2]` = -1, `par[3]` = -3, `par[4]` = -1),
+  trace=TRUE, control=list(maxiter=100)))
+
+testnlxb<- try(nlxb(frm, data=data.frame(x = 1:6), 
+              start= c(`par[1]` = -3, `par[2]` = -1, `par[3]` = -3, `par[4]` = -1),
+              trace=TRUE))
+
+testnlxbn<- try(nlxb(frm, data=data.frame(x = 1:6), 
+              start= c(`par[1]` = -3, `par[2]` = -1, `par[3]` = -3, `par[4]` = -1),
+              trace=TRUE, control=list(japprox="jacentral")))
+
+testnlsLM<- try(nlsLM(frm, data=data.frame(x = 1:6), 
+                start= c(`par[1]` = -3, `par[2]` = -1, `par[3]` = -3, `par[4]` = -1),
+                trace=TRUE, control=list(maxiter=100)))
+```
+
+The results above for `nlsr::nlxb()` accord with the accepted solution, but
+a large number of iterations are used. The Wood problem is,
+however, known to be difficult. 
+
+Both `nls()` and `minpack.lm::nlsLM()` required the specification of more than
+the default number of "iterations" (essentially Jacobian evaluations, which
+`nlsr` limits with the control parameter `jemax` for which the default is a
+very aggressive 5000). Note that `nls()` did NOT terminate except on this limit.
+I have not determined, as yet, the precise cause of this.
 
 ## Ongoing efforts
 
