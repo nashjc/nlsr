@@ -75,17 +75,118 @@ and Jacobian later in the vignette.
 The iteration in all the major tools mentioned is the solution of the Gauss-Newton 
 equations. `nls()` uses a variant of an approach suggested by @Hartley61, while 
 `nlsr` and `minpack.lm` use variants of the method published by @Marquardt1963, 
-though it was suggested earlier by @Levenberg1944. The details of the method in 
-`nlsr` are discussed in  @JNABRefactoringNLS22.
+though it was suggested earlier by @Levenberg1944. 
 Though it is unlikely to be useful in general, control settings for `nlxb()` 
 or `nlfb()` allow for those routines to perform a variety of Hartley 
 and Marquardt algorithms. This
 has been useful for learning about the algorithms, but tangential to simply finding
 parameters of nonlinear models.
 
-In general, the Levenberg-Marquardt stabilization is important in obtaining solutions.
-The default method of `nls()` terminates with `singular gradient` unnecessarily in 
-too many instances.
+Nonlinear least squares methods are mostly founded on some or
+other variant of the Gauss-Newton algorithm. The function we
+wish to minimize is the sum of squares of the (nonlinear) 
+residuals $r(x)$ where there are $m$ observations (elements of $r$)
+and $n$ parameters $x$. Hence the function is
+
+$$    f(x) = \sum_i({r_i}^2)$$
+
+Newton's method starts with an original set of parameters $x[0]$.
+At a given iteraion, which could be the first, we want to solve
+
+$$    x[k+1]  =  x[k]  -   H^{-1}  g$$
+   
+where $H$ is the Hessian and $g$ is the gradient at $x[k]$. We can 
+rewrite this as a solution, at each iteration, of 
+  
+$$    H \delta = -g$$
+
+with
+
+$$    x[k+1]  =  x[k] + \delta$$
+         
+For the particular sum of squares, the gradient is 
+
+$$    g(x) = 2 * r[k]$$
+
+and 
+
+$$    H(x) = 2 ( J' J  +  \sum_i(r_i * Z_i))$$
+
+where $J$ is the Jacobian (first derivatives of $r$ w.r.t. $x$)
+and $Z_i$ is the tensor of second derivatives of $r_i$ w.r.t. $x$).
+Note that $J'$ is the transpose of $J$. 
+
+The primary simplification of the Gauss-Newton method is to
+assume that the second term above is negligible. As there is
+a common factor of 2 on each side of the Newton iteration 
+after the simplification of the Hessian, the Gauss-Newton
+iteration equation is
+
+$$    (J' J)  \delta = - J' r$$
+<!-- find the very convoluted code behind `nls()` very difficult to decipher. Unfortunately, its authors have now (as far as I am aware) all ceased to maintain the code. -->
+
+
+
+
+This iteration frequently fails. The approximation of the Hessian
+by the Jacobian inner-product is one reason, but there is also
+the possibility that the sum of squares function is not
+"quadratic" enough that the unit step reduces it. @Hartley61
+introduced a line search along delta. @Marquardt1963 suggested
+replacing $J' J$ with $(J' J + \lambda * D)$ where $D$ is a diagonal
+matrix intended to partially approximate the omitted portion of
+the Hessian. Choices suggested by Marquardt were $D = I$ (a unit matrix) or
+$D$ = (diagonal part of $J' J$). The former approach, when $\lambda$ is
+large enough that the iteration is essentially
+
+$$    \delta = - g / \lambda $$
+
+gives a version of the steepest descents algorithm. Using the
+diagonal of $J' J$, we have a scaled version of this
+(see \url{https://en.wikipedia.org/wiki/Levenberg-Marquardt_algorithm};
+<!-- https://en.wikipedia.org/wiki/Levenberg%E2%80%93Marquardt_algorithm -->
+@Levenberg1944 predated Marquardt, but the latter seems to
+have done the practical work that brought the approach to general attention.)
+
+Both `nlsr::nlxb()` and `minpack.lm::nlsLM` use a Levenberg-Marquardt stabilization
+of the iteration described above, with `nlsr` using the modification involving the 
+$\phi$ control parameter. The complexities of the code in `minpack.lm` are such that I
+have relied largely on the documentation
+to judge how the iteration is accomplished. `nls()` uses a straightforward 
+Hartley variant of the Gauss-Newton iteration,
+but rather than form the sum of squares and cross-products, uses a QR decomposition 
+of the matrix
+$J$ that has been found by a forward difference approximation. The line search used
+by `nls()` is a simple back-tracking search using a step reduction factor of 0.5 as
+the default stepsize reduction.
+
+@jncnm79 and @jnmws87 solve
+
+$$ (J^T J + \lambda D_x)   \delta  = - J^T r $$
+
+by the Cholesky decomposition. In this $D_x = (D + \phi * I)$ is used as above
+and $\lambda$ is a number of modest size initially. $\phi$ is typically 1. Clearly
+for $\lambda = 0$ we have a Gauss-Newton method. Typically, the sum of squares of 
+the residuals calculated at the "new" set of parameters is used as a 
+criterion for keeping those parameter values. If so, the size of $\lambda$ is 
+reduced. If not, we increase the size of $\lambda$ and compute a new $\delta$. 
+Note that a new $J$, the expensive step in each iteration, is NOT required in 
+this latter case. 
+
+In 2022, a modification to use $D_y = (\psi * D + \phi * I)$ was introduced,
+though the matrix equations are solved via a QR decomposition approach. Within
+the code, control parameters `psi`, `phi` and `stepredn` were introduced so that
+a variety of Gauss-Newton, Hartley, or Marquardt approaches are available by 
+simple control modifications. Experience so far suggests that a Levenberg-Marquardt
+stabilization is much more reliable than the Gauss-Newton-Hartley choices, but that
+different selections of `psi` and `phi` perform rather similarly.
+As for Gauss-Newton methods, the details of how to start, adjust and 
+terminate the iteration lead to many variants, increased by these different 
+possibilities for specifying $D$. See @jncnm79.
+
+
+
+
 
 ### Programming language
 
