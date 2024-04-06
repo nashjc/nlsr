@@ -67,18 +67,15 @@ can be specified in control parameters. Package `nlsr` provides four approximati
 options, with a further control `ndstep` for the size of the
 step used in the approximation.
 
-There is more discussion of special considerations for specifying the residuals
-and Jacobian later in the vignette.
-
 ### Stabilization of Gauss-Newton computations
 
 The iteration in all the major tools mentioned is the solution of the Gauss-Newton 
 equations. `nls()` uses a variant of an approach suggested by @Hartley61, while 
 `nlsr` and `minpack.lm` use variants of the method published by @Marquardt1963, 
-though it was suggested earlier by @Levenberg1944. 
-Though it is unlikely to be useful in general, control settings for `nlxb()` 
-or `nlfb()` allow for those routines to perform a variety of Hartley 
-and Marquardt algorithms. This
+though it was suggested earlier by @Levenberg1944. The details of the method in 
+`nlsr` are discussed in  @JNABRefactoringNLS22.
+Though it is unlikely to be useful in general, control settings for `nlxb()` or `nlfb()`
+allow for those routines to perform a variety of Hartley and Marquardt algorithms. This
 has been useful for learning about the algorithms, but tangential to simply finding
 parameters of nonlinear models.
 
@@ -199,8 +196,8 @@ because it is usually interpreted rather than compiled. In recent years the
 performance penalty for using code entirely in R has been much reduced
 with the just-in-time compiler and other improvements, so that using an all-R 
 package offers acceptable performance. Indeed, in `nlsr` the use of R may be 
-less of a performance cost than the choice to be aggressive in ensuring
-a solution has been found, which forces more iterations to be used.
+less of a performance cost than the attempt to ensure the solution has been found, 
+which forces more iterations to be used.
 
 ## An illustrative example
 
