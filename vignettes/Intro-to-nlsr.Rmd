@@ -535,8 +535,53 @@ rosnlm<-nls.lm(par=strt, fn=frres, jac=frjac)
 summary(rosnlm)  
 ```
 
-I find it awkward to solve problems specified this way with `nls()` and do not believe
-it is worth pursuing that topic.
+`nls()` does not lend itself to solving problems via functional specification,
+so that possibility will not be pursued here.
+
+One use of this functional specification with `nlsr::nlfb()` that is sometimes 
+helpful is the solution of **nonlinear equations**. Essentially, if we can compute
+"residuals" in the form
+
+$$  resfn(x, Data) $$
+
+where $x$ are our parameters and $Data$ is exogenous information needed to compute
+the residual functions, then a result where the residuals are zero has solved a
+set of nonlinear equations. There are tools for the nonlinear equations problem,
+in particular package `nleqslv`,  @p-nleqslv. However, there may be no solution
+to the nonlinear equations, in which case the nonlinear least squares approach 
+may be helpful to see if we are "close" or to enable some exploration of the 
+problem. 
+
+To assist users in the case that a Jacobian function is not (easily) available,
+package `nlsr` offers the possibility of numerical derivatives using functions 
+for forward, backward, or central difference approximations, or those from 
+the `numDeriv` package. These are used by quoting the names of the approximation
+functions, namely `jacfn="jafwd"`, `jacfn="jaback"`, `jacfn="jacentral"`, and
+`jacfn="jand"`. My experience is that the forward and backward approximations
+fail more often than I would like, and the `numDeriv` approximation works well
+but uses too much computational effort. The central difference seems a sensible
+compromise.
+
+It is a disappointment that for the extended Rosenbrock problem, the choice 
+makes no difference whatever.
+
+```{r exrosenn, eval=TRUE}
+# Extended Rosenbrock functional test with numerical Jacobian
+require(minpack.lm)
+require(nlsr)
+strt<-c(-1.2,1)
+rosnlff<-nlfb(strt, resfn=frres, jacfn="jafwd")
+print(rosnlff)
+rosnlfb<-nlfb(strt, resfn=frres, jacfn="jaback")
+print(rosnlfb)
+rosnlfc<-nlfb(strt, resfn=frres, jacfn="jacentral")
+print(rosnlfc)
+rosnlfnd<-nlfb(strt, resfn=frres, jacfn="jand")
+print(rosnlfnd)
+# minpack.lm has built in (likely forward difference) Jacobian
+rosnlmn<-nls.lm(par=strt, fn=frres)
+summary(rosnlmn)  
+```
 
 
 ## Weighted nonlinear regression
