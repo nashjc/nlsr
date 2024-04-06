@@ -67,21 +67,126 @@ can be specified in control parameters. Package `nlsr` provides four approximati
 options, with a further control `ndstep` for the size of the
 step used in the approximation.
 
+There is more discussion of special considerations for specifying the residuals
+and Jacobian later in the vignette.
+
 ### Stabilization of Gauss-Newton computations
 
 The iteration in all the major tools mentioned is the solution of the Gauss-Newton 
 equations. `nls()` uses a variant of an approach suggested by @Hartley61, while 
 `nlsr` and `minpack.lm` use variants of the method published by @Marquardt1963, 
-though it was suggested earlier by @Levenberg1944. The details of the method in 
-`nlsr` are discussed in  @JNABRefactoringNLS22.
-Though it is unlikely to be useful in general, control settings for `nlxb()` or `nlfb()`
-allow for those routines to perform a variety of Hartley and Marquardt algorithms. This
+though it was suggested earlier by @Levenberg1944. 
+Though it is unlikely to be useful in general, control settings for `nlxb()` 
+or `nlfb()` allow for those routines to perform a variety of Hartley 
+and Marquardt algorithms. This
 has been useful for learning about the algorithms, but tangential to simply finding
 parameters of nonlinear models.
 
-In general, the Levenberg-Marquardt stabilization is important in obtaining solutions.
-The default method of `nls()` terminates with `singular gradient` unnecessarily in 
-too many instances.
+Nonlinear least squares methods are mostly founded on some or
+other variant of the Gauss-Newton algorithm. The function we
+wish to minimize is the sum of squares of the (nonlinear) 
+residuals $r(x)$ where there are $m$ observations (elements of $r$)
+and $n$ parameters $x$. Hence the function is
+
+$$    f(x) = \sum_i({r_i}^2)$$
+
+Newton's method starts with an original set of parameters $x[0]$.
+At a given iteraion, which could be the first, we want to solve
+
+$$    x[k+1]  =  x[k]  -   H^{-1}  g$$
+   
+where $H$ is the Hessian and $g$ is the gradient at $x[k]$. We can 
+rewrite this as a solution, at each iteration, of 
+  
+$$    H \delta = -g$$
+
+with
+
+$$    x[k+1]  =  x[k] + \delta$$
+         
+For the particular sum of squares, the gradient is 
+
+$$    g(x) = 2 * r[k]$$
+
+and 
+
+$$    H(x) = 2 ( J' J  +  \sum_i(r_i * Z_i))$$
+
+where $J$ is the Jacobian (first derivatives of $r$ w.r.t. $x$)
+and $Z_i$ is the tensor of second derivatives of $r_i$ w.r.t. $x$).
+Note that $J'$ is the transpose of $J$. 
+
+The primary simplification of the Gauss-Newton method is to
+assume that the second term above is negligible. As there is
+a common factor of 2 on each side of the Newton iteration 
+after the simplification of the Hessian, the Gauss-Newton
+iteration equation is
+
+$$    (J' J)  \delta = - J' r$$
+<!-- find the very convoluted code behind `nls()` very difficult to decipher. Unfortunately, its authors have now (as far as I am aware) all ceased to maintain the code. -->
+
+
+
+
+This iteration frequently fails. The approximation of the Hessian
+by the Jacobian inner-product is one reason, but there is also
+the possibility that the sum of squares function is not
+"quadratic" enough that the unit step reduces it. @Hartley61
+introduced a line search along delta. @Marquardt1963 suggested
+replacing $J' J$ with $(J' J + \lambda * D)$ where $D$ is a diagonal
+matrix intended to partially approximate the omitted portion of
+the Hessian. Choices suggested by Marquardt were $D = I$ (a unit matrix) or
+$D$ = (diagonal part of $J' J$). The former approach, when $\lambda$ is
+large enough that the iteration is essentially
+
+$$    \delta = - g / \lambda $$
+
+gives a version of the steepest descents algorithm. Using the
+diagonal of $J' J$, we have a scaled version of this
+(see \url{https://en.wikipedia.org/wiki/Levenberg-Marquardt_algorithm};
+<!-- https://en.wikipedia.org/wiki/Levenberg%E2%80%93Marquardt_algorithm -->
+@Levenberg1944 predated Marquardt, but the latter seems to
+have done the practical work that brought the approach to general attention.)
+
+Both `nlsr::nlxb()` and `minpack.lm::nlsLM` use a Levenberg-Marquardt stabilization
+of the iteration described above, with `nlsr` using the modification involving the 
+$\phi$ control parameter. The complexities of the code in `minpack.lm` are such that I
+have relied largely on the documentation
+to judge how the iteration is accomplished. `nls()` uses a straightforward 
+Hartley variant of the Gauss-Newton iteration,
+but rather than form the sum of squares and cross-products, uses a QR decomposition 
+of the matrix
+$J$ that has been found by a forward difference approximation. The line search used
+by `nls()` is a simple back-tracking search using a step reduction factor of 0.5 as
+the default stepsize reduction.
+
+@jncnm79 and @jnmws87 solve
+
+$$ (J^T J + \lambda D_x)   \delta  = - J^T r $$
+
+by the Cholesky decomposition. In this $D_x = (D + \phi * I)$ is used as above
+and $\lambda$ is a number of modest size initially. $\phi$ is typically 1. Clearly
+for $\lambda = 0$ we have a Gauss-Newton method. Typically, the sum of squares of 
+the residuals calculated at the "new" set of parameters is used as a 
+criterion for keeping those parameter values. If so, the size of $\lambda$ is 
+reduced. If not, we increase the size of $\lambda$ and compute a new $\delta$. 
+Note that a new $J$, the expensive step in each iteration, is NOT required in 
+this latter case. 
+
+In 2022, a modification to use $D_y = (\psi * D + \phi * I)$ was introduced,
+though the matrix equations are solved via a QR decomposition approach. Within
+the code, control parameters `psi`, `phi` and `stepredn` were introduced so that
+a variety of Gauss-Newton, Hartley, or Marquardt approaches are available by 
+simple control modifications. Experience so far suggests that a Levenberg-Marquardt
+stabilization is much more reliable than the Gauss-Newton-Hartley choices, but that
+different selections of `psi` and `phi` perform rather similarly.
+As for Gauss-Newton methods, the details of how to start, adjust and 
+terminate the iteration lead to many variants, increased by these different 
+possibilities for specifying $D$. See @jncnm79.
+
+
+
+
 
 ### Programming language
 
@@ -94,8 +199,8 @@ because it is usually interpreted rather than compiled. In recent years the
 performance penalty for using code entirely in R has been much reduced
 with the just-in-time compiler and other improvements, so that using an all-R 
 package offers acceptable performance. Indeed, in `nlsr` the use of R may be 
-less of a performance cost than the attempt to ensure the solution has been found, 
-which forces more iterations to be used.
+less of a performance cost than the choice to be aggressive in ensuring
+a solution has been found, which forces more iterations to be used.
 
 ## An illustrative example
 
@@ -119,15 +224,16 @@ the (residual) functions that are to be squared and then their squares
 summed to provide the  **loss function** or **objective function** 
 to be minimized by adjusting the **parameters** that define the 
 set of functions. In the case of the Hobbs problem, I was told the scientists
-who collected the data believe that the growth of weeds followed a 3-parameter
+who collected the data believed that the growth of weeds followed a 3-parameter
 logistic sigmoid growth curve where $y$ (the `weed` data) changes with time ($t$) 
 (the `tt` index) according to the function
 
 **Logistic3U**:
 $$  y \approx  b_1 / (1 + b_2 * exp(- b_3 * t)) $$
 
-The problem (using the 3 parameter logistic form above) has very bad scaling and regions
-in the parameter space where the sum of squares objective is nearly "flat", so that its
+The problem (using the 3 parameter logistic form above) has very bad 
+scaling and regions in the parameter space where the sum of squares 
+objective is nearly "flat", so that its
 Hessian, or matrix of second derivatives, is almost singular. When this occurs, 
 methods cannot easily make progress towards the optimal solution.
 
@@ -137,7 +243,7 @@ experience they take quite a lot of work to set up reliably, but R does have
 some worthwhile possibilities in some, though not all, of the **selfStart**
 modelling functions, especially those in the package `nlraa` (@MiguezNLRAA2021).
 
-There are, however, alternatives to the model above. For example, a simple scaling 
+There are alternatives to the model above. For example, a simple scaling 
 can make the solution to the problem easier to find, such as
 
 **Logistic3S**:
@@ -153,7 +259,8 @@ $$   Asym =  b_1 = 100 * c_1 $$
 $$ exp(xmid/scal)  =  b_2 = 10 * c_2 $$
 $$ 1/scal  =  b_3 $$
 
-`nlsr` tries to find solutions from very poor initial parameter values. While
+`nlsr` is programmed to try to find solutions from very poor initial 
+parameter values. While
 this is not always possible, `nslr` has generally been able to succeed in finding
 solutions, even when all parameters are started at 1. Let us compare its results
 with those of `nls()` and `nlsLM()`.
@@ -183,11 +290,12 @@ tnls1<-try(nls(formula=frmt, start=stt1, data=weeddf))
 summary(tnls1)
 cat("\n")
 ```
+The "singular gradient" results here, with this problem, were the main 
+motivation for developing `nlsr`. It is actually the Jacobian matrix 
+which is singular, but because the Jacobian is in a sense the "gradient"
+of the residuals, R has emitted its particular error report.
 
 ### Solution attempts with nlsr tools
-
-<!-- # source("/home/john/current/GSoC2021/improvenls/sp.R") -->
-
 
 ```{r ex02nlsr}
 library(nlsr)
@@ -208,6 +316,9 @@ rtnlx1<-residuals(tnlx1)
 print(rtnlx1)
 cat("explicit sumsquares =", sum(rtnlx1^2),"\n")
 ```
+
+`nlsr::nlxb()` has succeeded in finding a solution in all cases from the
+poor "all-1s" starts. 
 
 ### Solution attempts with minpack.lm
 
@@ -302,17 +413,23 @@ print(badstart)
 
 ### Extracting standard errors from nlsr solutions
 
-While it is straightforward to display coefficients of models with their standard errors
-(SE) and related statistics by **print**ing the solution, some users may need to be able
-to save and use the quantities, for example, in particular presentations of them. A query
-from Rohana Ambagaspitiya of the University of Calgary prompted me to explain how to do
-this, as the SE's and related quantities are not in the output of `nlxb()` or `nlfb()`,
-but are computed in the `summary()` and `print()` functions. Saving the SE of the
-`Asym` coefficient in the `tnlx1` solution above is illustrated.
+While it is straightforward to display coefficients of models with 
+their standard errors (SE) and related statistics by **print**ing 
+the solution, some users may need to be able
+to save and use the quantities, for example, in particular 
+presentations of them. A query
+from Rohana Ambagaspitiya of the University of Calgary prompted me to 
+explain how to do this, as the SE's and related quantities are not 
+in the output of `nlxb()` or `nlfb()`,
+but are computed in the `summary()` and `print()` functions. Saving 
+the SE of the `Asym` coefficient in the `tnlx1` solution above is 
+illustrated.
 
 ```{r tnlx1se, echo=TRUE, eval=TRUE}  
 ssum<-summary(tnlx1)
-str(ssum)
+# str(ssum) # This will display the contents of the summary if we wish.
+# The key element is the param array
+print(ssum$param)
 AsymSE<-ssum$param[1,2]
 AsymSE
 ```
@@ -321,7 +438,8 @@ AsymSE
 ## selfStart options
 
 The form of the logistic given by `frmt` is available as a **selfStart** model,
-needing no starting parameters with `nls()`. The code is in base R in location 
+needing no starting parameters with `nls()` or `minpack.lm::nlsLM()`. 
+The code is in base R in location 
 ` src/library/stats/R/zzModels.R`.
 
 ```{r ex06, echo=TRUE}  
@@ -341,22 +459,23 @@ that expended by `nlxb()` from an extremely crude start (all 1's). An alternativ
 selfStart for this version of the logistic is included in package `nlsr` as 
 `SSlogisJN.R`.
 
-Users should be aware that the programming of selfStart
-models involves quite esoteric aspects of R which I find prone to errors and difficult to 
-grasp easily. Developers who have built them for us deserve our thanks. A particularly
-important collection of such tools is in the package @MiguezNLRAA2021. 
+Users should be aware that the programming of selfStart models involves 
+quite esoteric aspects of R which I find prone to errors and difficult to 
+grasp easily. Developers who have built them for us deserve our thanks. A 
+particularly important collection of such tools is in the package @MiguezNLRAA2021. 
 
 ###  SSlogisJN.R for the 3-parameter logistic
 
-`SSlogisJN.R` uses ideas for selfStart from @Ratkowsky1983 for the Logistic3T form of the 
+`SSlogisJN.R` uses ideas for selfStart from @Ratkowsky1983 for the 
+Logistic3T form of the 
 model. It produces only an approximate set of starting parameters, unlike `SSlogis.R`. 
 The core of the idea is as follows, where we use the abbreviated output function to
 save page space.
   
 ```{r ex07, echo=TRUE}  
-Asymt <- 2*max(weed)
+Asymt <- 2*max(weed) # use double the largest weed value as a guess to Asymt
 Asymt
-pw <- Asymt/weed
+pw <- Asymt/weed # intermediate quantities to compute scale and xmidt
 pw1<-pw-1
 lpw1<-log(pw1)
 clin <- coef(lm(lpw1~tt))
@@ -747,30 +866,126 @@ There are differences in the (weighted) sums of squares. The **dynweighted** cas
 the residuals weighted
 by the actual CURRENT fits as expressed by the formula. The **formulaweighted** case
 computes the weights at each
-iteration from the previous (or original) fit. It is a form of iteratively weighted least
-squares. The case
-**wtt3nlm** above uses `nlsLM` with weights specified in `wfct()` and computes the weights
-once from an unweighted
+iteration from the previous (or original) fit. It is a form of 
+iteratively weighted least squares. The case
+**wtt3nlm** above uses `nlsLM` with weights specified in `wfct()` and 
+computes the weights once from an unweighted
 model, then runs a second, statically weighted calculation. Keeping track of these
 differences requires a lot of
 care, and I advise documenting what is done carefully.
 
+## Models that use multiple functional forms
+
+The query by John Sorkin in 2013 on the R-help list, item
+https://stat.ethz.ch/pipermail/r-help/2013-January/344918.html ,
+asks about fitting a composite model made up of "pieces". Sorkin's
+problem, as described, seems incomplete. We will use two problems
+that we can present clearly. 
+
+### Two straight lines
+
+We will generate data for two 
+intersecting straight lines. These will intersect at the point
+`(kx, ky)`, with slopes `sl` and `sr` on the left and right hand
+sides of the point.
+
+```{r 2slA}
+xx<-1:50 # simple sequence of 50 points
+kx<-24 # Set x coordinate of intersect
+ky<-10 # Set y coordinate of intersect
+sl<-1 # left slope
+sr<-0 # right slope
+# now write down model using conditionals
+formu<- yy ~ (xx <= kx)*(sl*(xx - kx)+ky) +  (xx > kx)*(sr*(xx - kx)+ky) 
+# Generate "exact" model for given parameters
+yy0<- (xx <= kx)*(sl*(xx - kx)+ky) +  (xx > kx)*(sr*(xx - kx)+ky) 
+ee<-runif(50, -3, 3) # generate some "errors"
+ee<-ee-mean(ee) # but center them
+yy<-yy0+ee # and add error to the "exact" model
+sldf<-data.frame(xx=xx, yy=yy) # make a data frame of the data
+# Try to estimate a model from the data and the formula
+t2sl<-try(nlxb(formu, data=sldf, start=c(kx=1, ky=1, sl=1, sr=1), trace=TRUE))
+# But that fails because the ">" in the formula trips up derivative program
+# We can still use approximate Jacobian
+t2slx<-nlxb(formu, data=sldf, start=c(kx=1, ky=1, sl=1, sr=1), trace=TRUE,
+            control=list(japprox="jacentral"))
+t2slx
+coef(t2slx)
+plot(xx, yy)
+yline<-fitted(t2slx)
+lines(xx, yline, type='l', col='red')
+```
+
+### The WOOD test function
+
+Let us try an example -- the Wood test function (Problem 14 in @More1981TUO).
+Some authors refer to this as the Colville function 
+(https://www.sfu.ca/~ssurjano/colville.html)
+
+This problem is usually stated as a function minimization in
+4 parameters. This is 
+
+$$ f(x) = 100*({x_1}^2-x_2)^2+(x_1-1)^2+(x_3-1)^2+  \\
+    90*({x_3}^2-x_4)^2+10.1((x_2-1)^2+(x_4-1)^2)+  \\
+    19.8*(x_2-1)*(x_4-1)$$
+
+
+It is, however, a nonlinear least squares problem for which we can write the
+residuals as a set of formulas.
+
+```{r woodform1}
+library(nlsr)
+library(minpack.lm)
+frm<- 0 ~ (x == 1) * (10 * (`par[2]` - `par[1]` * `par[1]`)) + 
+  (x == 2) * (1 - `par[1]`) + 
+  (x == 3) * ((`par[4]` - `par[3]` * `par[3]`) * sqrt(90)) + 
+  (x == 4) * (1 - `par[3]`) + 
+  (x == 5) * ((`par[2]` + `par[4]` - 2) * sqrt(10)) + 
+  (x == 6) * ((`par[2]` - `par[4]`) * sqrt(0.1))
+
+testnls<- try(nls(frm, data=data.frame(x = 1:6), 
+  start= c(`par[1]` = -3, `par[2]` = -1, `par[3]` = -3, `par[4]` = -1),
+  trace=TRUE, control=list(maxiter=100)))
+
+testnlxb<- try(nlxb(frm, data=data.frame(x = 1:6), 
+              start= c(`par[1]` = -3, `par[2]` = -1, `par[3]` = -3, `par[4]` = -1),
+              trace=TRUE))
+
+testnlxbn<- try(nlxb(frm, data=data.frame(x = 1:6), 
+              start= c(`par[1]` = -3, `par[2]` = -1, `par[3]` = -3, `par[4]` = -1),
+              trace=TRUE, control=list(japprox="jacentral")))
+
+testnlsLM<- try(nlsLM(frm, data=data.frame(x = 1:6), 
+                start= c(`par[1]` = -3, `par[2]` = -1, `par[3]` = -3, `par[4]` = -1),
+                trace=TRUE, control=list(maxiter=100)))
+```
+
+The results above for `nlsr::nlxb()` accord with the accepted solution, but
+a large number of iterations are used. The Wood problem is,
+however, known to be difficult. 
+
+Both `nls()` and `minpack.lm::nlsLM()` required the specification of more than
+the default number of "iterations" (essentially Jacobian evaluations, which
+`nlsr` limits with the control parameter `jemax` for which the default is a
+very aggressive 5000). Note that `nls()` did NOT terminate except on this limit.
+I have not determined, as yet, the precise cause of this.
 
 ## Ongoing efforts
 
-The examples above show how to use package `nlsr` as it exists at the end of December
-2022.
-The story, however, is not finished. It would be very nice to be able to identify and work
-with models that are partially linear. Solving such models is possible with the `algorithm="plinear"`
-option of `nls()`, but identifying which parameters enter linearly is not easy for most users. 
-Moreover, the specification
-of the model to the `VARPRO` solver that is called by the `plinear` option is inconsistent
-with the general specification used by `nls()` and other nonlinear least squares tools for R.
+The examples above show how to use package `nlsr` as it exists at the beginning
+of February 2024. The story, however, is not finished. It would be very 
+nice to be able to identify and work with models that are partially 
+linear. Solving such models is possible with the `algorithm="plinear"`
+option of `nls()`, but identifying which parameters enter linearly is 
+not easy for most users. Moreover, the specification
+of the model to the `VARPRO` solver that is called by the `plinear` 
+option is inconsistent with the general specification used by `nls()` and 
+other nonlinear least squares tools for R.
 
-There are also a number of possible tweaks to details in `nlsr` and efforts to include such
-improvements are a continuing interest.
-I welcome communication and collaboration to continue the improvement of the package and
-R in general. 
+There are also a number of possible tweaks to details in `nlsr` and 
+efforts to include such improvements are a continuing interest.
+I welcome communication and collaboration to continue the improvement 
+of the package and R in general. 
 
 
 ## References
