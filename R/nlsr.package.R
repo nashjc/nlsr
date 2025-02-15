@@ -40,7 +40,17 @@ coef.nlsr <- function(object, ...) {
        out # JN 170109
 }
 
-summary.nlsr <- function(object, ...) {
+summary.nlsr <- function(object, ...) { ## ?? do we ever use ... or is it needed to match
+##                                         some R-core syntax
+## FROM nlfb() get:
+##  pnum<-as.vector(pnum)
+##  names(pnum) <- pnames
+##  result <- list(resid = resbest, jacobian = Jac, feval = feval, 
+##            jeval = jeval, coefficients = pnum, ssquares = ssbest, lower=lower, 
+##            upper = upper, maskidx = maskidx, weights0 = weights0, 
+##            weights = weights, formula = NULL) # chg 190805
+##  class(result) <- "nlsr" ## Needed for print method
+## 
   smalltol <- .Machine$double.eps * 1000
   options(digits = 5) # 7 is default
   resname <- deparse(substitute(object))
@@ -112,7 +122,7 @@ summary.nlsr <- function(object, ...) {
 #    if (min(Sd) <= smalltol * max(Sd)) { # singular
 #      XtXinv <- matrix(NA, nrow=npar, ncol=npar)
 #    } else {  ## Above not needed because we have set default
-    if (min(Sd) > smalltol * max(Sd)) { # singular
+    if (min(Sd) > smalltol * max(Sd)) { # NOT singular, else leave XtXinv all NA
         Sinv <- 1/Sd
       if (length(notmask) > 1)  { # 220809 use 
         VS <- crossprod(t(V), diag(Sinv))
@@ -138,19 +148,23 @@ summary.nlsr <- function(object, ...) {
 #    list(pnames, c("Estimate", "Std. Error", "t value", "Pr(>|t|)"))
   colnames(param) <- c("Estimate", "Std. Error", "t value", "Pr(>|t|)")
   rownames(param) <- pnames
+# Add coefficients 250215
   ans <- list(residuals = res, sigma = sqrt(resvar),  
-              df = c(npar, rdf), cov.unscaled = XtXinv,
-              param = param, resname=resname, ssquares=ss, nobs=nobs, 
+              df = c(npar, rdf), cov.unscaled = XtXinv, 
+              param = param, resname=resname, ssquares=ss, nobs=nobs, coefficients=coeff,
               ct=ct, mt=mt, Sd=Sdout, gr=gr, jeval=object$jeval,feval=object$feval)
-  class(ans)<-"nlsr"
+  class(ans)<-"nlsr.summary" # changed to summary 250215
   ans
 } # end summary()
 
-print.nlsr <- function(x, ...) {
+print.nlsr <- function(x, ...) { # ?? do we want print.nlsr.summary
   if (inherits(x,"try-error") || is.null(x$coefficients)) {
     cat("Object has try-error or missing parameters\n")
     return(invisible(x))
   }
+  cat("x:\n")
+  print(str(x))
+  cat("================\n")
   xx<-summary(x) # calls summary to get information
   with(xx, { 
     pname<-rownames(param) # param is augmented coefficients with SEs and tstats
@@ -166,6 +180,7 @@ print.nlsr <- function(x, ...) {
     for (i in 1:dim(param)[1]){
       tmpname<-pname[i]
       if (is.null(tmpname)) {tmpname <- paste("p_",i,sep='')}
+## 20250215 Bug somewhere here with Selfstart. Not getting the parameter names.
       cat(format(tmpname, width=10)," ")
       cat(format(param[[i]], digits=6, width=12))
       cat(ct[[i]],mt[[i]]," ")

@@ -39,4 +39,4 @@ SSlogisJN <- # selfStart(~ Asym/(1 + exp((xmid - input)/scal)),
 		          names(pars)<-c("Asym", "xmid", "scal")
 		          pars
 		          },
-              parameters = c("Asym", "xmid", "scal"))
+                          parameters = c("Asym", "xmid", "scal"))
