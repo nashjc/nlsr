@@ -157,16 +157,20 @@ summary.nlsr <- function(object, ...) { ## ?? do we ever use ... or is it needed
   ans
 } # end summary()
 
-print.nlsr <- function(x, ...) { # ?? do we want print.nlsr.summary
+print.nlsr <- function(x, ...) { 
   if (inherits(x,"try-error") || is.null(x$coefficients)) {
     cat("Object has try-error or missing parameters\n")
     return(invisible(x))
   }
-  cat("x:\n")
-  print(str(x))
-  cat("================\n")
-  xx<-summary(x) # calls summary to get information
-  with(xx, { 
+  print(summary(x, ...)) # calls summary to get information
+  return(invisible(x)) # ?? needed?
+}
+
+print.nlsr.summary <- function(x, ...) { # ?? do we want print.nlsr.summary
+##  xx<-summary(x, ...) # calls summary to get information Added ... 250217
+##  cat("str(xx)\n")
+##  print(str(xx))
+  with(x, { 
     pname<-rownames(param) # param is augmented coefficients with SEs and tstats
     npar <- dim(param)[1] # previously length(coeff) 
     cat("residual sumsquares = ",ssquares," on ",nobs,"observations\n")
@@ -176,11 +180,9 @@ print.nlsr <- function(x, ...) { # ?? do we want print.nlsr.summary
     SEs <- param[,2]
     tstat <- param[,3]
     pval <- param[,4]
-#    for (i in seq_along(param[,1])){
     for (i in 1:dim(param)[1]){
       tmpname<-pname[i]
       if (is.null(tmpname)) {tmpname <- paste("p_",i,sep='')}
-## 20250215 Bug somewhere here with Selfstart. Not getting the parameter names.
       cat(format(tmpname, width=10)," ")
       cat(format(param[[i]], digits=6, width=12))
       cat(ct[[i]],mt[[i]]," ")
@@ -194,7 +196,7 @@ print.nlsr <- function(x, ...) { # ?? do we want print.nlsr.summary
   }) # remember to close with()
   # return(NULL) 
   invisible(x)
-} # end print.nlsr()
+} # end print.nlsr.summary()
 
 pshort <- function(x) {
   xname<-deparse(substitute(x))
